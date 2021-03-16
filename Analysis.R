@@ -1,37 +1,47 @@
 # Brings together the Allen and de Zwart and Lucassen wages and prices
 
-# allen_hh_size = 3.15
+allen_hh_size = 3.15
 de_Zwart_hh_size = 4.1
+hh_size = de_Zwart_hh_size
 grams_of_silver_in_a_rupee = 10.78
 # This number is wrong, but I just use it to get the rupee values from Allen's data.
 # It doesn't matter anyway, both prices and wages are originally in rupees.
 
 
-allen = get_Allen_wages(hh_size = de_Zwart_hh_size)
+allen = get_Allen_wages(hh_size = hh_size)
 
 de_Zwart_prices = get_de_Zwart_prices_and_interpolate()
 
 de_Zwart_wages = get_de_Zwart_wages()
 
+allen[, realWageAllenBasket := nominalWages * 360 / (hh_size * pricesAllenBasket)
+    ][, realWageDeZwartBasket := nominalWages * 360 / (hh_size * pricesDeZwartBasket)
+    ]
+
 allen[de_Zwart_prices, on = .(year, region), deZwartPrices := i.prices
-    ][allen[region == 'north'], on = .(year), northPrices := i.prices
-    ][allen[region == 'east'], on = .(year), eastPrices := i.prices
-    ][de_Zwart_prices[region == 'north'], on = .(year), deZwartNorthPrices := i.prices
-    ][de_Zwart_prices[region == 'east'], on = .(year), deZwartEastPrices := i.prices
-    ][region == 'south' & ((!is.na(deZwartNorthPrices) & !is.na(northPrices)) | (!is.na(deZwartEastPrices) & !is.na(eastPrices))),
-      deZwartPrices := prices * harmonicmean(deZwartNorthPrices/northPrices, deZwartEastPrices/eastPrices)
-    ][, deZwartPricesWithWestImputed := fifelse(region == 'west' & ((!is.na(deZwartNorthPrices) & !is.na(northPrices)) | (!is.na(deZwartEastPrices) & !is.na(eastPrices))),
-                                                prices * harmonicmean(deZwartNorthPrices/northPrices, deZwartEastPrices/eastPrices),
-                                                deZwartPrices)
-    ][, realWagesWithDeZwartPrices := nominalWages * 360 / (deZwartPrices * grams_of_silver_in_a_rupee * de_Zwart_hh_size)
-    ][, realWagesWithDeZwartPricesWithWestImputed := nominalWages * 360 / (deZwartPricesWithWestImputed * grams_of_silver_in_a_rupee * de_Zwart_hh_size)
-    ][, c('northPrices', 'eastPrices', 'deZwartNorthPrices', 'deZwartEastPrices') := NULL]
+    ][region == 'south', deZwartPrices := pricesDeZwartBasket / grams_of_silver_in_a_rupee
+    ][, realWageDeZwartPrices := nominalWages * 360 / (deZwartPrices * grams_of_silver_in_a_rupee * hh_size)
+    ]
+
+
+
+myColors = viridis(n = 7)[c(1,3,6,7)]
+myColors[4] = '#EDC924FF'
+names(myColors) = c('south', 'west', 'east', 'north')
+colScale = scale_colour_manual(name = 'region', values = myColors)
 
 
 
 
-
-
+ggplot(data = allen, aes(x = year, color = region)) +
+  geom_point(aes(y = realWageAllenBasket), alpha = 0.6) +
+  geom_smooth(aes(y = realWageAllenBasket), se = F) +
+  geom_point(aes(y = realWageDeZwartPrices), alpha = 0.6) +
+  geom_smooth(aes(y = realWageDeZwartPrices), se = F) +
+  theme_cowplot() +
+  colScale +
+  labs(title = 'Welfare Ratio', subtitle = '(Real Wage / Subsistence Wage)', y = NULL, x = 'Year') +
+  theme(plot.title = element_text(hjust = 0))
 
 
 
@@ -58,7 +68,7 @@ withAllen = rbind(de_Zwart_wages, allen_to_add,
                   fill = T)
 withAllen[de_Zwart_prices, on = .(region, year), `:=`(prices = prices, prices_MA3 = prices_MA3, prices_MA5 = prices_MA5)]
 withAllen[region == 'south', `:=`(prices = southPriceIndex, prices_MA3 = southPriceIndex_MA3, prices_MA5 = southPriceIndex_MA5)]
-withAllen[, realWage360 := dwage * 360 / (prices_MA5 * de_Zwart_hh_size)]
+withAllen[, realWage360 := dwage * 360 / (prices_MA5 * hh_size)]
 
 withAllen[realWage360 > 0, logRealWage := log(realWage360)]
 
@@ -83,12 +93,6 @@ withAllen[, adjustedRealWage := exp(AdjustedLogRealWage)]
 
 withAllen[, id2 := paste0(region, decade)]
 summary(lm(logRealWage ~ factor(id2), data = withAllen))
-
-myColors = viridis(n = 7)[c(1,3,6,7)]
-myColors[4] = '#EDC924FF'
-names(myColors) = c('south', 'west', 'east', 'north')
-colScale = scale_colour_manual(name = 'region', values = myColors)
-
 
 source_year_bins = withAllen[, .(realWage = exp(mean(AdjustedLogRealWage))), .(data_creator, year, region)]
 ggplot(data = source_year_bins, aes(x = year, y = realWage, color = region)) +
@@ -198,16 +202,16 @@ de_Zwart_decade_averages =
      ][locations_to_regions, on = .(location)
      ][, regional_average_nominal_wage_Rs := exp(NaNtoNA(mean(log(nominal_wage_Rs), na.rm = TRUE))), .(region, year)
      ][de_Zwart_prices_decadal, on = .(year = decade, region)
-     ][, real_wage_360 := nominal_wage_Rs * 360 / (prices * de_Zwart_hh_size)
-     ][, regional_average_real_wage_360 := regional_average_nominal_wage_Rs * 360 / (prices * de_Zwart_hh_size)][]
+     ][, real_wage_360 := nominal_wage_Rs * 360 / (prices * hh_size)
+     ][, regional_average_real_wage_360 := regional_average_nominal_wage_Rs * 360 / (prices * hh_size)][]
 
 all_together_decade_averages =
   allen[, decade := year - year %% 10
       ][, .(realWage = exp(NaNtoNA(mean(log(realWage), na.rm = TRUE))),
             prices = exp(NaNtoNA(mean(log(prices), na.rm = TRUE))),
             nominalWages = exp(NaNtoNA(mean(log(nominalWages), na.rm = TRUE))),
-            realWagesWithDeZwartPrices = exp(NaNtoNA(mean(log(realWagesWithDeZwartPrices), na.rm = TRUE))),
-            realWagesWithDeZwartPricesWithWestImputed = exp(NaNtoNA(mean(log(realWagesWithDeZwartPricesWithWestImputed), na.rm = TRUE)))),
+            realWageDeZwartPrices = exp(NaNtoNA(mean(log(realWageDeZwartPrices), na.rm = TRUE))),
+            realWageDeZwartPricesWithWestImputed = exp(NaNtoNA(mean(log(realWageDeZwartPricesWithWestImputed), na.rm = TRUE)))),
         .(decade, region)]
 
 all_together_decade_averages[unique(de_Zwart_decade_averages[, .(decade = year,
@@ -217,21 +221,21 @@ all_together_decade_averages[unique(de_Zwart_decade_averages[, .(decade = year,
                                on = .(decade, region),
                                `:=`(deZwartRealWage = i.deZwartRealWage, deZwartNominalWage = i.deZwartNominalWage)]
 
-all_together_decade_averages[, deZwartWageAllenPrices := deZwartNominalWage * grams_of_silver_in_a_rupee * 360 / (prices * de_Zwart_hh_size)]
+all_together_decade_averages[, deZwartWageAllenPrices := deZwartNominalWage * grams_of_silver_in_a_rupee * 360 / (prices * hh_size)]
 
-all_together_decade_averages[, best := fifelse(region %in% c('north', 'east'), deZwartRealWage, realWagesWithDeZwartPricesWithWestImputed)]
+all_together_decade_averages[, best := fifelse(region %in% c('north', 'east'), deZwartRealWage, realWageDeZwartPricesWithWestImputed)]
 
 ggplot(data = all_together_decade_averages, aes(x = decade)) +
   geom_point(aes(y = realWage, color = region)) +
   geom_smooth(aes(y = realWage, color = region), se = FALSE)
 
 ggplot(data = all_together_decade_averages, aes(x = decade)) +
-  geom_point(aes(y = realWagesWithDeZwartPrices, color = region)) +
-  geom_smooth(aes(y = realWagesWithDeZwartPrices, color = region), se = FALSE)
+  geom_point(aes(y = realWageDeZwartPrices, color = region)) +
+  geom_smooth(aes(y = realWageDeZwartPrices, color = region), se = FALSE)
 
 ggplot(data = all_together_decade_averages, aes(x = decade)) +
-  geom_point(aes(y = realWagesWithDeZwartPricesWithWestImputed, color = region)) +
-  geom_smooth(aes(y = realWagesWithDeZwartPricesWithWestImputed, color = region), se = FALSE)
+  geom_point(aes(y = realWageDeZwartPricesWithWestImputed, color = region)) +
+  geom_smooth(aes(y = realWageDeZwartPricesWithWestImputed, color = region), se = FALSE)
 
 ggplot(data = all_together_decade_averages, aes(x = decade)) +
   geom_point(aes(y = deZwartWageAllenPrices, color = region)) +

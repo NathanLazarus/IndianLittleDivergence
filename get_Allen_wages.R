@@ -1,7 +1,6 @@
 read_Allen = function(region, hh_size) {
   read_excel_dt('AllenStuderIMessedWith.xlsx', region, skip = 13) %>%
-    setnames(., make_clean_names(names(.))) %>%
-    .[, realWage := unskilledwage * 360 / (hh_size * cpi_ind)]
+    setnames(., make_clean_names(names(.)))
 }
 
 get_Allen_wages = function(hh_size) {
@@ -14,17 +13,17 @@ get_Allen_wages = function(hh_size) {
   all_years = data.table(year = sort(unique(c(alleneast$year, allenwest$year, allensouth$year, allennorth$year))))
 
   allen = rbind(
-    alleneast[!is.na(year), .(year, region = 'east', realWage, prices = cpi_ind,
-                              prices_de_Zwart_basket = cpi_de_zwart, nominalWages = unskilledwage)
+    alleneast[!is.na(year), .(year, region = 'east', pricesAllenBasket = cpi_ind,
+                              pricesDeZwartBasket = cpi_de_zwart, nominalWages = unskilledwage)
             ][all_years, on = .(year)],
-    allenwest[!is.na(year), .(year, region = 'west', realWage, prices = cpi_ind,
-                              prices_de_Zwart_basket = cpi_de_zwart, nominalWages = unskilledwage)
+    allenwest[!is.na(year), .(year, region = 'west', pricesAllenBasket = cpi_ind,
+                              pricesDeZwartBasket = cpi_de_zwart, nominalWages = unskilledwage)
             ][all_years, on = .(year)],
-    allensouth[!is.na(year), .(year, region = 'south', realWage, prices = cpi_ind,
-                               prices_de_Zwart_basket = cpi_de_zwart, nominalWages = unskilledwage)
+    allensouth[!is.na(year), .(year, region = 'south', pricesAllenBasket = cpi_ind,
+                               pricesDeZwartBasket = cpi_de_zwart, nominalWages = unskilledwage)
              ][all_years, on = .(year)],
-    allennorth[!is.na(year), .(year, region = 'north', realWage, prices = cpi_ind,
-                               prices_de_Zwart_basket = cpi_de_zwart, nominalWages = unskilledwage)
+    allennorth[!is.na(year), .(year, region = 'north', pricesAllenBasket = cpi_ind,
+                               pricesDeZwartBasket = cpi_de_zwart, nominalWages = unskilledwage)
              ][all_years, on = .(year)]
     )
 
